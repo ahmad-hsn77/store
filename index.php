@@ -234,7 +234,13 @@ function public_url(?string $path): string
         return $path;
     }
     $baseUrl = (string) cfg('base_url');
-    if ($baseUrl === '' || $baseUrl === 'https://example.com/api') {
+    if (
+        $baseUrl === '' ||
+        $baseUrl === 'https://example.com/api' ||
+        strpos($baseUrl, 'your-api-service') !== false ||
+        strpos($baseUrl, 'your-php-service') !== false ||
+        strpos($baseUrl, 'your-railway-domain') !== false
+    ) {
         $scheme = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']))
             ? $_SERVER['HTTP_X_FORWARDED_PROTO']
             : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
