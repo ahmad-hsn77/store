@@ -5,6 +5,6 @@ return [
     'db_name' => getenv('MYSQLDATABASE') ?: getenv('DB_DATABASE') ?: 'store_app',
     'db_user' => getenv('MYSQLUSER') ?: getenv('DB_USERNAME') ?: 'root',
     'db_pass' => getenv('MYSQLPASSWORD') ?: getenv('DB_PASSWORD') ?: '',
-    'base_url' => getenv('APP_URL') ?: 'https://example.com/api',
+    'base_url' => getenv('APP_URL') ?: 'https://store-production-4d9b.up.railway.app',
     'upload_dir' => getenv('UPLOAD_DIR') ?: __DIR__ . '/uploads',
 ];
