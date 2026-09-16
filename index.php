@@ -233,7 +233,15 @@ function public_url(?string $path): string
     if (preg_match('/^https?:\/\//', $path)) {
         return $path;
     }
-    return rtrim((string) cfg('base_url'), '/') . '/' . ltrim($path, '/');
+    $baseUrl = (string) cfg('base_url');
+    if ($baseUrl === '' || $baseUrl === 'https://example.com/api') {
+        $scheme = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']))
+            ? $_SERVER['HTTP_X_FORWARDED_PROTO']
+            : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $baseUrl = $host ? $scheme . '://' . $host : '';
+    }
+    return rtrim($baseUrl, '/') . '/' . ltrim($path, '/');
 }
 
 function save_upload(string $field, string $prefix): ?string
@@ -570,10 +578,11 @@ function find_product(int $id): array
 
 function save_product_uploads(int $productId, string $field, string $prefix): void
 {
-    if (!isset($_FILES[$field])) {
+    $uploads = $_FILES[$field] ?? $_FILES[$field . '[]'] ?? null;
+    if (!$uploads) {
         return;
     }
-    $files = normalize_files($_FILES[$field]);
+    $files = normalize_files($uploads);
     foreach ($files as $file) {
         $path = save_uploaded_file($file, $prefix);
         if ($path) {
