@@ -21,6 +21,9 @@ $config = require $configFile;
 if (!is_dir($config['upload_dir'])) {
     mkdir($config['upload_dir'], 0775, true);
 }
+if (!is_writable($config['upload_dir'])) {
+    fail('Upload directory is not writable: ' . $config['upload_dir'], 500);
+}
 
 try {
     $pdo = new PDO(
@@ -249,7 +252,9 @@ function save_uploaded_file(array $file, string $prefix): ?string
     $ext = pathinfo($file['name'] ?? 'upload.bin', PATHINFO_EXTENSION);
     $name = $prefix . '_' . bin2hex(random_bytes(8)) . ($ext ? '.' . $ext : '');
     $target = rtrim((string) cfg('upload_dir'), '/\\') . DIRECTORY_SEPARATOR . $name;
-    move_uploaded_file($file['tmp_name'], $target);
+    if (!move_uploaded_file($file['tmp_name'], $target)) {
+        fail('Failed to save uploaded file', 500);
+    }
     return 'uploads/' . $name;
 }
 
