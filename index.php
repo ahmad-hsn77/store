@@ -43,6 +43,10 @@ $input = input();
 $path = request_path();
 
 try {
+    if (strpos($path, '/uploads/') === 0) {
+        serve_upload($path);
+    }
+
     switch ($path) {
         case '/employee/register':
             register_employee();
@@ -175,6 +179,27 @@ function fail(string $message, int $status = 400): void
 {
     http_response_code($status);
     echo json_encode(['error' => 1, 'message' => $message], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function serve_upload(string $path): void
+{
+    $relativePath = ltrim(substr($path, strlen('/uploads/')), '/\\');
+    if ($relativePath === '' || strpos($relativePath, '..') !== false) {
+        fail('File not found', 404);
+    }
+
+    $filePath = rtrim((string) cfg('upload_dir'), '/\\') . DIRECTORY_SEPARATOR . $relativePath;
+    if (!is_file($filePath)) {
+        fail('File not found', 404);
+    }
+
+    $mimeType = function_exists('mime_content_type')
+        ? mime_content_type($filePath)
+        : 'application/octet-stream';
+    header('Content-Type: ' . ($mimeType ?: 'application/octet-stream'));
+    header('Content-Length: ' . filesize($filePath));
+    readfile($filePath);
     exit;
 }
 
