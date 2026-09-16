@@ -1,0 +1,11 @@
+{
+  "name": "store-app/api-backend",
+  "description": "PHP API backend for the Store App Flutter client.",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "ext-json": "*"
+  }
+}
