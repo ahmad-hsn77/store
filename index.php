@@ -599,6 +599,15 @@ function normalize_files(array $files): array
     $out = [];
     foreach ($files['name'] as $key => $name) {
         if (is_array($name)) {
+            foreach ($name as $nestedKey => $nestedName) {
+                $out[] = [
+                    'name' => $nestedName,
+                    'type' => $files['type'][$key][$nestedKey] ?? null,
+                    'tmp_name' => $files['tmp_name'][$key][$nestedKey] ?? null,
+                    'error' => $files['error'][$key][$nestedKey] ?? UPLOAD_ERR_NO_FILE,
+                    'size' => $files['size'][$key][$nestedKey] ?? 0,
+                ];
+            }
             continue;
         }
         $out[] = [
