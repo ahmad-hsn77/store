@@ -18,10 +18,10 @@ if (!file_exists($configFile)) {
 }
 $config = require $configFile;
 
-if (!is_dir($config['upload_dir'])) {
+if (!cloudinary_configured() && !is_dir($config['upload_dir'])) {
     mkdir($config['upload_dir'], 0775, true);
 }
-if (!is_writable($config['upload_dir'])) {
+if (!cloudinary_configured() && !is_writable($config['upload_dir'])) {
     fail('Upload directory is not writable: ' . $config['upload_dir'], 500);
 }
 
@@ -219,6 +219,13 @@ function cfg(string $key)
     return $config[$key] ?? null;
 }
 
+function cloudinary_configured(): bool
+{
+    return (string) cfg('cloudinary_cloud_name') !== ''
+        && (string) cfg('cloudinary_api_key') !== ''
+        && (string) cfg('cloudinary_api_secret') !== '';
+}
+
 function in_value(string $key, $default = null)
 {
     global $input;
@@ -292,13 +299,109 @@ function save_uploaded_file(array $file, string $prefix): ?string
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         return null;
     }
+    if (cloudinary_configured()) {
+        return upload_to_cloudinary($file, $prefix);
+    }
+    $uploadDir = rtrim((string) cfg('upload_dir'), '/\\');
+    if ($uploadDir === '') {
+        fail('Upload directory is not configured', 500);
+    }
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true)) {
+        fail('Upload directory cannot be created', 500);
+    }
+    if (!is_writable($uploadDir)) {
+        fail('Upload directory is not writable', 500);
+    }
     $ext = pathinfo($file['name'] ?? 'upload.bin', PATHINFO_EXTENSION);
     $name = $prefix . '_' . bin2hex(random_bytes(8)) . ($ext ? '.' . $ext : '');
-    $target = rtrim((string) cfg('upload_dir'), '/\\') . DIRECTORY_SEPARATOR . $name;
+    $target = $uploadDir . DIRECTORY_SEPARATOR . $name;
     if (!move_uploaded_file($file['tmp_name'], $target)) {
         fail('Failed to save uploaded file', 500);
     }
     return 'uploads/' . $name;
+}
+
+function upload_to_cloudinary(array $file, string $prefix): string
+{
+    if (!is_uploaded_file($file['tmp_name'])) {
+        fail('Invalid uploaded file', 400);
+    }
+
+    $cloudName = (string) cfg('cloudinary_cloud_name');
+    $apiKey = (string) cfg('cloudinary_api_key');
+    $apiSecret = (string) cfg('cloudinary_api_secret');
+    $folder = 'store_app/' . trim($prefix, '/');
+    $timestamp = time();
+    $signature = sha1('folder=' . $folder . '&timestamp=' . $timestamp . $apiSecret);
+    $fileContent = file_get_contents($file['tmp_name']);
+    if ($fileContent === false) {
+        fail('Failed to read uploaded file', 500);
+    }
+    $boundary = '----StoreAppBoundary' . bin2hex(random_bytes(8));
+    $body = multipart_field($boundary, 'api_key', $apiKey)
+        . multipart_field($boundary, 'timestamp', (string) $timestamp)
+        . multipart_field($boundary, 'folder', $folder)
+        . multipart_field($boundary, 'signature', $signature)
+        . multipart_file(
+            $boundary,
+            'file',
+            $file['name'] ?? 'upload',
+            $file['type'] ?? 'application/octet-stream',
+            $fileContent
+        )
+        . "--{$boundary}--\r\n";
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: multipart/form-data; boundary={$boundary}\r\n"
+                . 'Content-Length: ' . strlen($body) . "\r\n",
+            'content' => $body,
+            'ignore_errors' => true,
+            'timeout' => 60,
+        ],
+    ]);
+    $response = file_get_contents(
+        'https://api.cloudinary.com/v1_1/' . rawurlencode($cloudName) . '/image/upload',
+        false,
+        $context
+    );
+    $status = cloudinary_response_status($http_response_header ?? []);
+
+    $data = json_decode((string) $response, true);
+    if ($status < 200 || $status >= 300 || !is_array($data) || empty($data['secure_url'])) {
+        $message = is_array($data) && isset($data['error']['message'])
+            ? $data['error']['message']
+            : 'Cloudinary upload failed';
+        fail($message, 500);
+    }
+
+    return (string) $data['secure_url'];
+}
+
+function multipart_field(string $boundary, string $name, string $value): string
+{
+    return "--{$boundary}\r\n"
+        . "Content-Disposition: form-data; name=\"{$name}\"\r\n\r\n"
+        . $value . "\r\n";
+}
+
+function multipart_file(string $boundary, string $name, string $filename, string $mimeType, string $content): string
+{
+    return "--{$boundary}\r\n"
+        . "Content-Disposition: form-data; name=\"{$name}\"; filename=\"{$filename}\"\r\n"
+        . "Content-Type: {$mimeType}\r\n\r\n"
+        . $content . "\r\n";
+}
+
+function cloudinary_response_status(array $headers): int
+{
+    foreach ($headers as $header) {
+        if (preg_match('/^HTTP\/\S+\s+(\d+)/', $header, $matches)) {
+            return (int) $matches[1];
+        }
+    }
+    return 0;
 }
 
 function user_payload(array $user, ?string $token = null): array
