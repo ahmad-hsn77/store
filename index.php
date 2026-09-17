@@ -70,6 +70,10 @@ try {
             require_user();
             center_information();
             break;
+        case '/center/update':
+            require_user();
+            center_update();
+            break;
         case '/centers/roles':
             require_user();
             center_roles();
@@ -543,6 +547,26 @@ function centers_index(): void
 function center_information(): void
 {
     ok(['center' => [center_payload(find_center((int) in_value('center_id', 0)))]]);
+}
+
+function center_update(): void
+{
+    $centerId = (int) in_value('center_id');
+    $center = find_center($centerId);
+    $image = save_upload('image', 'center');
+    $imagePath = $image ?: $center['image'];
+
+    $stmt = db()->prepare(
+        'UPDATE centers SET name = ?, location = ?, image = ? WHERE id = ?'
+    );
+    $stmt->execute([
+        in_value('center_name', $center['name']),
+        in_value('center_location', $center['location']),
+        $imagePath,
+        $centerId,
+    ]);
+
+    ok(['center' => [center_payload(find_center($centerId))]]);
 }
 
 function center_roles(): void
