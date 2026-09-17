@@ -469,12 +469,20 @@ function roles_for_user(int $userId): array
 
 function role_payload(array $role): array
 {
+    $center = null;
+    if (!empty($role['center_id'])) {
+        $stmt = db()->prepare('SELECT * FROM centers WHERE id = ? LIMIT 1');
+        $stmt->execute([(int) $role['center_id']]);
+        $center = $stmt->fetch();
+    }
+
     return [
         'id' => (int) $role['id'],
         'center_id' => isset($role['center_id']) ? (int) $role['center_id'] : null,
         'name' => $role['name'],
         'role_name' => $role['name'],
         'guard_name' => $role['guard_name'] ?? 'api',
+        'center' => $center ? center_payload($center) : null,
         'permissions' => [],
         'updated_at' => $role['updated_at'] ?? now_string(),
         'created_at' => $role['created_at'] ?? now_string(),
